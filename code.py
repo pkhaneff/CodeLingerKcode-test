@@ -1,5 +1,8 @@
+from greeting import get_message
+
+
 def main():
-	message = "Xin chào, đây là file test push code."
+	message = get_message()
 	print(message)
 
 
