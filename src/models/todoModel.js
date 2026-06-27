@@ -5,8 +5,20 @@ let todos = [
 ];
 
 class TodoModel {
-  static getAll() {
-    return todos;
+  static getAll({ q, completed } = {}) {
+    let result = todos;
+
+    if (q) {
+      const keyword = q.toLowerCase();
+      result = result.filter(t => t.title.toLowerCase().includes(keyword));
+    }
+
+    if (completed !== undefined) {
+      const isCompleted = completed === 'true';
+      result = result.filter(t => t.completed === isCompleted);
+    }
+
+    return result;
   }
 
   static getById(id) {

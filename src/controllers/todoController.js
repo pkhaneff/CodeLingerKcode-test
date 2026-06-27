@@ -3,7 +3,8 @@ const TodoModel = require('../models/todoModel');
 class TodoController {
   // GET /api/todos
   static getTodos(req, res) {
-    const todos = TodoModel.getAll();
+    const { q, completed } = req.query;
+    const todos = TodoModel.getAll({ q, completed });
     res.json(todos);
   }
 

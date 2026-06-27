@@ -34,17 +34,32 @@ Một ứng dụng backend đơn giản sử dụng **Node.js** và **Express** 
 
 | Phương thức | Endpoint | Mô tả |
 |---|---|---|
-| `GET` | `/api/todos` | Lấy danh sách toàn bộ todos |
+| `GET` | `/api/todos` | Lấy danh sách todos (Hỗ trợ lọc & tìm kiếm qua query parameters) |
 | `GET` | `/api/todos/:id` | Lấy thông tin chi tiết của một todo |
 | `POST` | `/api/todos` | Tạo mới một todo |
 | `PUT` | `/api/todos/:id` | Cập nhật một todo |
 | `DELETE` | `/api/todos/:id` | Xóa một todo |
+
+### Tính năng Lọc & Tìm kiếm (`GET /api/todos`)
+Bạn có thể truyền các tham số truy vấn sau trên URL:
+- `q`: Tìm kiếm gần đúng (không phân biệt hoa/thường) theo tiêu đề của todo.
+- `completed`: Lọc theo trạng thái hoàn thành (`true` hoặc `false`).
 
 ## Ví dụ sử dụng với `curl`
 
 - **Lấy danh sách tất cả todos:**
   ```bash
   curl -s http://localhost:3001/api/todos
+  ```
+
+- **Tìm kiếm todo có chứa từ khoá "learn":**
+  ```bash
+  curl -s "http://localhost:3001/api/todos?q=learn"
+  ```
+
+- **Lọc các todo đã hoàn thành:**
+  ```bash
+  curl -s "http://localhost:3001/api/todos?completed=true"
   ```
 
 - **Tạo mới todo:**
