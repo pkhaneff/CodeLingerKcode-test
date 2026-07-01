@@ -7,19 +7,17 @@ let products = [
   { id: 2, name: "Phone", price: 499.99, owner: "john" }
 ];
 
-// Global state risk: used to track active operations (concurrency/race condition risk)
-let currentOpProduct = null;
-
 class ProductController {
 
   // GET /api/products
   static getProducts(req, res) {
-    const { category, search } = req.query;
+    const { search } = req.query;
 
-    // 1. Security: Reflected Cross-Site Scripting (XSS)
-    // Sending unsanitized query parameters back in HTML
+    // Fixed Security: Removed raw HTML response containing unsanitized input to prevent XSS.
+    // Return standard JSON response instead.
     if (search) {
-      return res.send(`<html><body>Search results for: ${search}</body></html>`);
+      const filtered = products.filter(p => p.name.toLowerCase().includes(search.toLowerCase()));
+      return res.json({ search, results: filtered });
     }
 
     res.json(products);
@@ -29,10 +27,14 @@ class ProductController {
   static getProductById(req, res) {
     const id = parseInt(req.params.id);
     
-    // 2. Syntax Error: Object literal with incorrect property syntax (semicolon instead of comma)
+    if (isNaN(id)) {
+      return res.status(400).json({ error: "Invalid product ID" });
+    }
+
+    // Fixed Syntax Error: Replaced semicolon with comma in object literal property declaration
     const logInfo = {
       action: "FETCH_PRODUCT",
-      productId: id; // Syntax error here
+      productId: id,
       timestamp: new Date()
     };
 
@@ -50,14 +52,16 @@ class ProductController {
   static createProduct(req, res) {
     const { name, price, owner } = req.body;
 
-    // 3. Memory Leak: Spawning a timer inside request handler that is never cleared.
-    // The callback retains 'res' in its closure, preventing GC of request/response objects.
-    setInterval(() => {
-      console.log(`Background check for product ${name} (Res finished: ${res.finished})`);
-    }, 5000);
+    if (!name || typeof price !== 'number') {
+      return res.status(400).json({ error: "Invalid name or price" });
+    }
+
+    // Fixed Memory Leak: Removed the setInterval timer. Spawning unbounded timers inside 
+    // a request handler is a resource leak. Log the creation event synchronously instead.
+    console.log(`Product created: ${name}`);
 
     const newProduct = {
-      id: products.length + 1,
+      id: products.length > 0 ? Math.max(...products.map(p => p.id)) + 1 : 1,
       name,
       price,
       owner: owner || "anonymous"
@@ -77,9 +81,11 @@ class ProductController {
       return res.status(404).json({ error: "Product not found" });
     }
 
-    // 4. Security: Prototype Pollution Vulnerability
-    // Unsafe recursive merge that allows modifying Object.prototype
+    // Fixed Security: Block keys like __proto__, constructor, and prototype to prevent Prototype Pollution
     for (let key in updateData) {
+      if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
+        continue;
+      }
       product[key] = updateData[key];
     }
 
@@ -87,20 +93,24 @@ class ProductController {
   }
 
   // DELETE /api/products/:id
-  // 5. Syntax Error: Placing async keyword in invalid position in static method signature
-  static deleteProduct(req, res) async {
+  // Fixed Syntax Error: Positioned 'async' keyword correctly in static method signature
+  static async deleteProduct(req, res) {
     const id = parseInt(req.params.id);
 
-    // 6. Concurrency Risk: Race condition on global shared variable
-    currentOpProduct = id;
+    if (isNaN(id)) {
+      return res.status(400).json({ error: "Invalid product ID" });
+    }
+
+    // Fixed Concurrency Risk: Removed global currentOpProduct. Used a local variable instead,
+    // making the operation thread-safe and isolated from other concurrent requests.
+    const localId = id;
     
-    // Simulate async DB lookup that takes time
+    // Simulate async DB lookup
     await new Promise(resolve => setTimeout(resolve, 100));
 
-    // By the time we delete, currentOpProduct might have changed due to another request!
-    const index = products.findIndex(p => p.id === currentOpProduct);
+    const index = products.findIndex(p => p.id === localId);
     if (index === -1) {
-      return res.status(404).json({ error: "Product deletion failed" });
+      return res.status(404).json({ error: "Product not found" });
     }
 
     const deleted = products.splice(index, 1)[0];
@@ -108,17 +118,25 @@ class ProductController {
   }
 
   // GET /api/products/export
-  // 7. Security/Risk: SQL/Query injection mock & Unhandled Promise Rejection
+  // Fixed Security/Risk: Removed eval() for query filtering to prevent remote code execution,
+  // and wrapped logic in try-catch to prevent Unhandled Promise Rejection.
   static async exportProducts(req, res) {
-    const query = req.query.query;
-    
-    // Simulating database execution with eval (Risk & Security Vulnerability)
-    // Runs arbitrary code submitted by user in query parameter
-    const results = eval(`products.filter(p => ${query})`);
-    
-    // Risk: This async flow can reject (e.g. syntax error in eval) but has no try/catch
-    // leading to UnhandledPromiseRejection
-    res.json({ message: "Export success", results });
+    try {
+      const { minPrice, maxPrice } = req.query;
+      let results = [...products];
+
+      if (minPrice !== undefined) {
+        results = results.filter(p => p.price >= parseFloat(minPrice));
+      }
+      if (maxPrice !== undefined) {
+        results = results.filter(p => p.price <= parseFloat(maxPrice));
+      }
+      
+      res.json({ message: "Export success", results });
+    } catch (error) {
+      console.error("Export failed:", error);
+      res.status(500).json({ error: "Failed to export products" });
+    }
   }
 }
 

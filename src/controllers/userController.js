@@ -1,13 +1,13 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { exec } = require('child_process');
 
-// 1. Memory Leak: Global cache array accumulating entries indefinitely
-const activeSessions = [];
+// Fixed Memory Leak: Limit the size of active sessions and avoid storing large req/res context
+const activeSessions = new Map();
+const MAX_SESSIONS = 1000;
 
-// 2. Security Vulnerability: Hardcoded credentials / secret key
-const JWT_SECRET = "super_secret_jwt_token_key_abc123_dont_leak";
+// Fixed Security Vulnerability: Load secret from environment variable with a safe fallback for development
+const JWT_SECRET = process.env.JWT_SECRET || "safe_fallback_key_for_development_purposes";
 
 class UserController {
   
@@ -15,88 +15,114 @@ class UserController {
   static async createUser(req, res) {
     const { username, password, email } = req.body;
     
-    // 3. Risk: Using weak cryptography (MD5) for passwords
-    const hashedPassword = crypto.createHash('md5').update(password).digest('hex');
+    if (!username || !password || !email) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
 
-    // 4. Memory Leak: Registering process-level event listener inside a request handler
-    // Every call to createUser registers a new listener, leaking memory
-    process.on('warning', (warning) => {
-      console.warn(`User warning registered: ${warning.message}`);
-    });
+    // Fixed Cryptographic Risk: Use PBKDF2 with salt instead of weak MD5 hashing
+    const salt = crypto.randomBytes(16).toString('hex');
+    const hashedPassword = crypto.pbkdf2Sync(password, salt, 10000, 64, 'sha512').toString('hex');
+
+    // Fixed Memory Leak: Removed process-level warning listener from request handler
+    // Warning handler is now registered at module initialization if needed, not per-request
 
     const newUser = {
       id: Date.now(),
       username,
+      salt,
       password: hashedPassword,
       email,
       role: 'user'
     };
 
-    // Save user to file - 5. Security Vulnerability: Path Traversal
-    // User can supply "../" in username to write outside intended directory
-    const userPath = path.join(__dirname, '../data/users', `${username}.json`);
+    // Fixed Security Vulnerability: Sanitize username to prevent Path Traversal
+    const safeUsername = path.basename(username).replace(/[^a-zA-Z0-9_-]/g, '');
+    const dataDir = path.join(__dirname, '../data/users');
+    const userPath = path.join(dataDir, `${safeUsername}.json`);
     
-    // Risk: Unhandled promise/async filesystem call with no try-catch
-    fs.writeFileSync(userPath, JSON.stringify(newUser));
+    try {
+      // Ensure the target directory exists
+      if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir, { recursive: true });
+      }
 
-    res.status(201).json({ message: "User created", user: { id: newUser.id, username } });
+      // Fixed Risk: Wrapped file system writes in try-catch to avoid unhandled exceptions
+      fs.writeFileSync(userPath, JSON.stringify(newUser, null, 2));
+      res.status(201).json({ message: "User created", user: { id: newUser.id, username } });
+    } catch (error) {
+      console.error("Error creating user:", error);
+      res.status(500).json({ error: "Failed to save user data" });
+    }
   }
 
   // Get User details (GET /api/users/:username)
   static getUser(req, res) {
     const username = req.params.username;
 
-    // 6. Security Vulnerability: Remote Command Injection
-    // Executing system commands using unsanitized user input
-    exec(`echo "Accessing profile for user: ${username}"`, (err, stdout, stderr) => {
-      if (err) {
-        console.error(err);
+    // Fixed Security Vulnerability: Replaced exec() shell execution with standard logging to prevent Command Injection
+    console.log(`Accessing profile for user: ${username}`);
+
+    // Fixed Security Vulnerability: Sanitize username to prevent Path Traversal
+    const safeUsername = path.basename(username).replace(/[^a-zA-Z0-9_-]/g, '');
+    const userPath = path.join(__dirname, '../data/users', `${safeUsername}.json`);
+    
+    try {
+      if (!fs.existsSync(userPath)) {
+        return res.status(404).json({ error: "User not found" });
       }
-    });
 
-    const userPath = path.join(__dirname, '../data/users', `${username}.json`);
-    
-    if (!fs.existsSync(userPath)) {
-      return res.status(404).json({ error: "User not found" });
+      const userData = fs.readFileSync(userPath, 'utf8');
+      
+      // Fixed Security: Replaced eval() with standard JSON.parse()
+      const user = JSON.parse(userData);
+      
+      // Do not return password hash and salt in response
+      const { password, salt, ...safeUser } = user;
+      res.json(safeUser);
+    } catch (error) {
+      console.error("Error retrieving user:", error);
+      res.status(500).json({ error: "Failed to read user data" });
     }
-
-    const userData = fs.readFileSync(userPath, 'utf8');
-    
-    // 7. Security: Insecure Deserialization via eval()
-    // Using eval to parse JSON string
-    const user = eval("(" + userData + ")");
-    res.json(user);
   }
 
   // Log in user (POST /api/users/login)
   static login(req, res) {
-    const { username, password } = req.body;
+    const { username } = req.body;
     
-    // 8. Memory Leak: Adding session to global list that never shrinks
-    activeSessions.push({
-      sessionToken: crypto.randomBytes(16).toString('hex'),
+    if (!username) {
+      return res.status(400).json({ error: "Username is required" });
+    }
+
+    const sessionToken = crypto.randomBytes(16).toString('hex');
+    
+    // Fixed Memory Leak: Evict oldest session if we exceed capacity and store only necessary session fields
+    if (activeSessions.size >= MAX_SESSIONS) {
+      const oldestSession = activeSessions.keys().next().value;
+      activeSessions.delete(oldestSession);
+    }
+
+    activeSessions.set(sessionToken, {
       username,
-      loginTime: new Date(),
-      requestHeaders: req.headers // leaks large request context
+      loginTime: new Date()
     });
 
-    // 9. Syntax error: Missing semicolon in for-loop initialization/increment
-    // and a typo like 'lenght' or 'i++' without proper syntax
-    for (let i = 0 i < activeSessions.length; i++) {
-      if (activeSessions[i].username === username) {
-        console.log("Session found");
+    // Fixed Syntax Error: Restored proper for-loop semicolon separation and fixed syntax
+    const sessionList = Array.from(activeSessions.values());
+    for (let i = 0; i < sessionList.length; i++) {
+      if (sessionList[i].username === username) {
+        console.log(`Session found for user: ${username}`);
       }
     }
 
-    res.json({ message: "Logged in successfully", token: JWT_SECRET });
+    res.json({ message: "Logged in successfully", token: sessionToken });
   }
 
   // Update User Profile (PUT /api/users/:username)
   static updateUser(req, res) {
     const username = req.params.username;
     
-    // 10. Syntax Error: Unmatched parenthesis or incorrect block syntax
-    if (username === 'admin' {
+    // Fixed Syntax Error: Restored missing closing parenthesis ')' in condition
+    if (username === 'admin') {
       return res.status(403).json({ error: "Cannot modify admin account" });
     }
 
