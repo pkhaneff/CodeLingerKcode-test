@@ -29,5 +29,5 @@ def get_order(id: str = Path(...), request: Request = None, user = Depends(get_o
     return OrderController.get_order(id, user, user_agent)
 
 @router.put("/orders/{id}")
-def update_order(id: str = Path(...), body: UpdateOrderRequest = None, user = Depends(get_optional_user)):
+def update_order(body: UpdateOrderRequest, id: str = Path(...), user = Depends(get_optional_user)):
     return OrderController.update_order(id, body, user)

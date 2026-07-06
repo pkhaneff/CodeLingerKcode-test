@@ -6,7 +6,13 @@ from src.controllers.report_controller import ReportController
 router = APIRouter()
 
 @router.post("/reports/generate", dependencies=[Depends(AuthMiddleware.rate_limiter)])
-def generate_report(request: Request):
+async def generate_report(request: Request):
+    try:
+        auth_header = request.headers.get("authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            await AuthMiddleware.authenticate(request)
+    except Exception:
+        pass
     user = getattr(request.state, "user", None)
     return ReportController.generate_report(user)
 
