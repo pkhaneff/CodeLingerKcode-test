@@ -103,7 +103,7 @@ class AuthMiddleware:
         if user.get("id") in blacklist:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="IP address blacklisted"
+                detail="User is blacklisted"
             )
             
         if user.get("role") != "admin":

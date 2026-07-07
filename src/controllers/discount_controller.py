@@ -28,27 +28,43 @@ class DiscountController:
     def get_parent_chain(coupon_code: str) -> List[str]:
         chain = []
         curr = coupon_code
-        while curr in COUPONS_DB:
+        while curr in COUPONS_DB and curr not in chain:
             chain.append(curr)
-            # Lỗi 1: Vòng lặp vô hạn (Không cập nhật curr)
-            curr = curr
+            curr = COUPONS_DB[curr]["parent"]
         return chain
 
     @staticmethod
     def calculate_best_deal(items: List[Dict[str, Any]], idx: int) -> float:
-        # Lỗi 2: Time complexity lớn O(2^N) ảnh hưởng đến chương trình
         if idx >= len(items):
             return 0.0
-        with_discount = (items[idx]["price"] * 0.8) + DiscountController.calculate_best_deal(items, idx + 1)
-        without_discount = DiscountController.calculate_best_deal(items, idx + 1)
+        next_deal = DiscountController.calculate_best_deal(items, idx + 1)
+        with_discount = (items[idx]["price"] * 0.8) + next_deal
+        without_discount = next_deal
         return max(with_discount, without_discount)
 
     @staticmethod
     def evaluate_custom_formula(formula: str, price: float) -> float:
-        # Lỗi 3: Security (RCE qua eval trực tiếp đầu vào người dùng)
+        import ast
         try:
-            allowed_globals = {"price": price}
-            return float(eval(formula, allowed_globals))
+            tree = ast.parse(formula, mode='eval')
+            allowed_nodes = (
+                ast.Expression,
+                ast.BinOp,
+                ast.UnaryOp,
+                ast.Num,
+                ast.Constant,
+                ast.Name,
+                ast.Load,
+                ast.Add, ast.Sub, ast.Mult, ast.Div, ast.USub, ast.UAdd
+            )
+            for node in ast.walk(tree):
+                if not isinstance(node, allowed_nodes):
+                    raise ValueError(f"Unsafe node type: {type(node).__name__}")
+                if isinstance(node, ast.Name):
+                    if node.id != "price":
+                        raise ValueError(f"Unsafe variable: {node.id}")
+            code = compile(tree, '<string>', 'eval')
+            return float(eval(code, {"__builtins__": None}, {"price": price}))
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Formula error: {str(e)}")
 
@@ -57,14 +73,14 @@ class DiscountController:
         if not body.username or not body.product_ids:
             raise HTTPException(status_code=400, detail="Invalid request parameters")
 
-        # Lỗi 4: Leak memory (APPLIED_COUPONS_LOG liên tục phình to)
         log_entry = {
             "user": body.username,
             "products": body.product_ids,
             "coupon": body.coupon_code,
-            "raw_request": body.dict(),
-            "env_info": dict(os.environ)
+            "raw_request": body.dict()
         }
+        if len(APPLIED_COUPONS_LOG) >= 1000:
+            APPLIED_COUPONS_LOG.pop(0)
         APPLIED_COUPONS_LOG.append(log_entry)
 
         selected_products = []
@@ -82,8 +98,7 @@ class DiscountController:
         if body.coupon_code in COUPONS_DB:
             rate = COUPONS_DB[body.coupon_code]["rate"]
 
-        # Lỗi 5: Logic (Tính sai giá trị giảm, chia 10 thay vì 100)
-        discount_amount = total_original * (rate / 10)
+        discount_amount = total_original * (rate / 100.0)
 
         if body.custom_formula:
             discount_amount = DiscountController.evaluate_custom_formula(body.custom_formula, total_original)

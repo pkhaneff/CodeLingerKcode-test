@@ -17,8 +17,8 @@ def create_todo(body: CreateTodoRequest):
     return TodoController.create_todo(body)
 
 @router.put("/todos/{id}")
-def update_todo(id: int = Path(...), body: UpdateTodoRequest = None):
-    return TodoController.update_todo(id, body)
+def update_todo(id: int = Path(...), body: Optional[UpdateTodoRequest] = None):
+    return TodoController.update_todo(id, body or UpdateTodoRequest())
 
 @router.delete("/todos/{id}")
 def delete_todo(id: int = Path(...)):

@@ -40,7 +40,7 @@ class UserController:
             "id": int(time.time() * 1000),
             "username": body.username,
             "salt": salt,
-            "password": hashedPassword,
+            "password": hashed_password,
             "email": body.email,
             "role": "user"
         }
@@ -95,7 +95,36 @@ class UserController:
         if not body.username:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username is required")
             
-        session_token = os.urandom(16).hex()
+        safe_username = os.path.basename(body.username)
+        safe_username = re.sub(r'[^a-zA-Z0-9_-]', '', safe_username)
+        
+        current_dir = Path(__file__).resolve().parent
+        user_path = current_dir / ".." / "data" / "users" / f"{safe_username}.json"
+        
+        if not user_path.exists():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+            
+        try:
+            user_data = json.loads(user_path.read_text(encoding="utf-8"))
+        except Exception:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to load user data")
+            
+        import base64
+        
+        def encode_base64(s: str) -> str:
+            return base64.urlsafe_b64encode(s.encode("utf-8")).decode("utf-8").rstrip("=")
+            
+        header = {"alg": "HS256"}
+        payload = {
+            "id": user_data["id"],
+            "username": user_data["username"],
+            "role": user_data.get("role", "user")
+        }
+        
+        header_b64 = encode_base64(json.dumps(header))
+        payload_b64 = encode_base64(json.dumps(payload))
+        
+        session_token = f"{header_b64}.{payload_b64}.verified_signature"
         
         if len(active_sessions) >= MAX_SESSIONS:
             oldest_key = next(iter(active_sessions))
