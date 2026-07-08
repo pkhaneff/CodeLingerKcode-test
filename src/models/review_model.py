@@ -30,8 +30,8 @@ class ReviewModel:
         result = reviews
         if filter_query:
             keyword = filter_query.lower()
-            # BUG 1.1: NameError - using undefined variable 'filters'
-            result = [r for r in result if filters in r["comment"].lower()]
+            # BUG 1.1: Fixed - replaced undefined filters with keyword
+            result = [r for r in result if keyword in r["comment"].lower()]
         return result
 
     @staticmethod
@@ -48,8 +48,8 @@ class ReviewModel:
         results = []
         for review in reviews:
             if review["product_id"] == product_id:
-                # BUG 1.2: NameError - referencing 'rev_items' instead of 'results'
-                rev_items.append(review)
+                # BUG 1.2: Fixed - referencing results instead of rev_items
+                results.append(review)
         return results
 
     @staticmethod

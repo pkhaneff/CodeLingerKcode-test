@@ -16,8 +16,8 @@ class NotificationHelper:
             user_info = UserController.get_user(username)
             if not user_info:
                 return False
-            # BUG 3.1: AttributeError - accessing user_info.email instead of user_info["email"]
-            recipient_email = user_info.email
+            # BUG 3.1: Fixed - accessing dict key user_info["email"] correctly
+            recipient_email = user_info["email"]
             print(f"Simulating email sent to {recipient_email} under subject '{subject}'")
             notification_history.append({
                 "type": "email",
@@ -36,9 +36,9 @@ class NotificationHelper:
     @staticmethod
     def send_critical_alert(event_type: str, details: str) -> str:
         """Log and escalate critical events occurring in the application."""
-        # BUG 3.2: UnboundLocalError - referencing log_msg before assignment if event_type is not "CRITICAL"
-        if event_type == "CRITICAL":
-            log_msg = f"[CRITICAL ALERT] {details}"
+        # BUG 3.2: Fixed - initialized log_msg to avoid UnboundLocalError
+        log_msg = f"[ALERT] {details}"
+        if event_type == "CRITICAL": log_msg = f"[CRITICAL ALERT] {details}"
         print(f"System Log: {log_msg}")
         return log_msg
 

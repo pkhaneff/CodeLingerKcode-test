@@ -24,8 +24,8 @@ def get_review_by_id(id: int = Path(...)):
 @router.post("/reviews", status_code=201)
 async def create_review(body: CreateReviewRequest):
     """Create a new product review, invoking sentiment checking rules."""
-    # BUG 5.1: TypeError - awaiting a non-async controller method
-    return await ReviewController.create_review(body)
+    # BUG 5.1: Fixed - calling non-async controller method directly
+    return ReviewController.create_review(body)
 
 @router.put("/reviews/{id}")
 def update_review(
@@ -64,8 +64,8 @@ def delete_review(
 @router.get("/reviews/product/{id}/summary")
 def get_product_summary(id: int = Path(...)):
     """Get aggregated ratings and sentiment stats for a specific product."""
-    # BUG 5.2: NameError - passing undefined variable product_idd instead of parameter id
-    return ReviewController.get_product_rating_summary(product_idd)
+    # BUG 5.2: Fixed - passing variable id correctly
+    return ReviewController.get_product_rating_summary(id)
 
 @router.get("/reviews/system/metadata")
 def get_system_metadata(authorization: Optional[str] = Header(None)):

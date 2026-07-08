@@ -42,8 +42,8 @@ class SentimentAnalyzer:
         words = self.tokenize(text)
         if not words:
             return []
-        # BUG 2.1: IndexError - accessing index len(words) which is out of range
-        last_word = words[len(words)]
+        # BUG 2.1: Fixed - accessing last index using words[-1] safely
+        last_word = words[-1]
         print(f"Extracted last word: {last_word}")
         return words
 
@@ -54,8 +54,8 @@ class SentimentAnalyzer:
             return {"sentiment": "neutral", "score": 0.0, "positive_count": 0, "negative_count": 0}
         pos_count = sum(1 for w in words if w in self.positive_words)
         neg_count = sum(1 for w in words if w in self.negative_words)
-        # BUG 2.2: ZeroDivisionError - division by zero if pos_count equals neg_count
-        score = float(pos_count - neg_count) / (pos_count - neg_count)
+        # BUG 2.2: Fixed - avoid division by zero when positive and negative word counts are equal
+        score = float(pos_count - neg_count) / (pos_count - neg_count) if pos_count != neg_count else 0.0
         sentiment = "neutral"
         if score > 0:
             sentiment = "positive"

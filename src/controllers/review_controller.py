@@ -47,9 +47,9 @@ class ReviewController:
                 detail="Comment and rating are required fields"
             )
         try:
-            # BUG 4.1: TypeError - passing product_id as a string to get_product_by_id
-            # get_product_by_id expects an integer. Comparing int id with str product_id will fail.
-            product = ProductController.get_product_by_id(body.product_id)
+            # BUG 4.1: Fixed - converting body.product_id to integer for get_product_by_id
+            # get_product_by_id expects an integer. Passing str product_id will now succeed.
+            product = ProductController.get_product_by_id(int(body.product_id))
         except HTTPException:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -117,8 +117,8 @@ class ReviewController:
     @staticmethod
     def delete_review(review_id: int, session_token: str) -> Dict[str, Any]:
         """Delete a review from the mock database, verifying authorization."""
-        # BUG 4.2: NameError - referencing user_sess_token instead of session_token
-        if user_sess_token not in active_sessions:
+        # BUG 4.2: Fixed - referencing session_token correctly
+        if session_token not in active_sessions:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid or expired session token"
