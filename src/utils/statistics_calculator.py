@@ -97,3 +97,91 @@ class StatisticsCalculator:
             "average_order_value": aov,
             "popular_products": popular_products
         }
+
+    @staticmethod
+    def calculate_median_order_value(orders: List[Dict[str, Any]]) -> float:
+        """
+        Calculates the median value of a list of orders.
+        """
+        if not orders:
+            return 0.0
+        values = []
+        for order in orders:
+            val = order.get("price", 0.0) * order.get("quantity", 1)
+            values.append(val)
+        values.sort()
+        n = len(values)
+        if n % 2 == 1:
+            return float(values[n // 2])
+        else:
+            return (values[n // 2 - 1] + values[n // 2]) / 2.0
+
+    @staticmethod
+    def calculate_sales_variance(orders: List[Dict[str, Any]]) -> float:
+        """
+        Calculates the variance of order values.
+        """
+        if not orders or len(orders) < 2:
+            return 0.0
+        values = [order.get("price", 0.0) * order.get("quantity", 1) for order in orders]
+        mean = sum(values) / len(values)
+        squared_diffs = [(val - mean) ** 2 for val in values]
+        return sum(squared_diffs) / (len(values) - 1)
+
+    @staticmethod
+    def calculate_sales_standard_deviation(orders: List[Dict[str, Any]]) -> float:
+        """
+        Calculates the standard deviation of order values.
+        """
+        import math
+        variance = StatisticsCalculator.calculate_sales_variance(orders)
+        return math.sqrt(variance)
+
+    @staticmethod
+    def get_daily_sales_trend(orders: List[Dict[str, Any]]) -> Dict[str, float]:
+        """
+        Aggregates sales total by date (YYYY-MM-DD format).
+        """
+        trend = {}
+        for order in orders:
+            date_str = order.get("date") or order.get("created_at")
+            if not date_str:
+                date_str = "unknown_date"
+            else:
+                date_str = date_str.split("T")[0]
+            val = order.get("price", 0.0) * order.get("quantity", 1)
+            trend[date_str] = trend.get(date_str, 0.0) + val
+        return trend
+
+    @staticmethod
+    def summarize_sales_metrics(orders: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Provides a comprehensive summary of sales metrics.
+        """
+        if not orders:
+            return {
+                "total_orders": 0,
+                "total_revenue": 0.0,
+                "average_value": 0.0,
+                "median_value": 0.0,
+                "variance": 0.0,
+                "std_dev": 0.0,
+                "daily_trend": {}
+            }
+
+        total_revenue = sum(o.get("price", 0.0) * o.get("quantity", 1) for o in orders)
+        avg = StatisticsCalculator.calculate_average_order_value(orders)
+        median = StatisticsCalculator.calculate_median_order_value(orders)
+        variance = StatisticsCalculator.calculate_sales_variance(orders)
+        std_dev = StatisticsCalculator.calculate_sales_standard_deviation(orders)
+        daily_trend = StatisticsCalculator.get_daily_sales_trend(orders)
+
+        return {
+            "total_orders": len(orders),
+            "total_revenue": total_revenue,
+            "average_value": avg,
+            "median_value": median,
+            "variance": variance,
+            "std_dev": std_dev,
+            "daily_trend": daily_trend
+        }
