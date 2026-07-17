@@ -8,6 +8,7 @@ from src.routes.user_routes import router as user_router
 from src.routes.product_routes import router as product_router
 from src.routes.order_routes import router as order_router
 from src.routes.review_routes import router as review_router
+from src.routes.discount_routes import router as discount_router
 
 app = FastAPI(title="Mock Todo Backend", version="1.0.0")
 
@@ -19,6 +20,8 @@ app.include_router(user_router, prefix="/api")
 app.include_router(product_router, prefix="/api")
 app.include_router(order_router, prefix="/api")
 app.include_router(review_router, prefix="/api")
+app.include_router(discount_router, prefix="/api")
+
 
 
 if __name__ == "__main__":
